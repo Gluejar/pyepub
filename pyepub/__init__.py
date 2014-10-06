@@ -366,7 +366,7 @@ class EPUB(zipfile.ZipFile):
         :param mediatype:
         """
         assert self.epub_mode != "r", "%s is not writable" % self
-        element = ET.Element("item",
+        element = ET.Element(NAMESPACE.get("opf")+"item",
                              attrib={"id": "id_"+str(uuid.uuid4())[:5], "href": href, "media-type": mediatype})
 
         try:
@@ -390,8 +390,8 @@ class EPUB(zipfile.ZipFile):
         """
         assert self.epub_mode != "r", "%s is not writable" % self
         fileid = self.additem(fileObject, href, mediatype)
-        itemref = ET.Element("itemref", attrib={"idref": fileid, "linear": linear})
-        reference = ET.Element("reference", attrib={"title": href, "href": href, "type": reftype})
+        itemref = ET.Element(NAMESPACE.get("opf")+"itemref", attrib={"idref": fileid, "linear": linear})
+        reference = ET.Element(NAMESPACE.get("opf")+"reference", attrib={"title": href, "href": href, "type": reftype})
         if position is None or position>len(self.opf[2]):
             self.opf[2].append(itemref)
             if self.info["guide"]:

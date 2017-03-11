@@ -408,6 +408,8 @@ class EPUB(zipfile.ZipFile):
         :type filename: str
         :param filename: name of the file to be writte
         """
+        if isinstance(filename, str):
+            filename = open(filename,'w')
         
         filename.seek(0)
         new_zip = zipfile.ZipFile(filename, 'w')

@@ -104,11 +104,12 @@ class EPUB(zipfile.ZipFile):
 
         # Iterate over <metadata> section, fill EPUB.info["metadata"] dictionary
         for i in self.opf.find("{0}metadata".format(NAMESPACE["opf"])):
-            tag = ns.sub('', i.tag)
-            if tag not in self.info["metadata"]:
-                self.info["metadata"][tag] = i.text or i.attrib
-            else:
-                self.info["metadata"][tag] = [self.info["metadata"][tag], i.text or i.attrib]
+            if 'tag' in i :
+                tag = ns.sub('', i.tag)
+                if tag not in self.info["metadata"]:
+                    self.info["metadata"][tag] = i.text or i.attrib
+                else:
+                    self.info["metadata"][tag] = [self.info["metadata"][tag], i.text or i.attrib]
 
         # Get id of the cover in <meta name="cover" />
         try:

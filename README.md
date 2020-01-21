@@ -2,17 +2,14 @@ pyepub
 ======
 
 An enhanced python library for dealing with EPUB2 files.
-Based on latest [py-clave](http://github.com/gabalese/py-clave) development release.
+Based on  [py-clave](http://github.com/gabalese/py-clave) development release.
+
+As of version 0.4.0, the module works in both python 2.7+ and Python 3.6+
 
 Installation
 ------------
 
-Grab the [latest stable release](https://github.com/gabalese/pyepub/archive/master.zip). Unpack the tarball and execute:
-
-```
-$ cd pyepub
-$ python setup.py install
-```
+`pip install pyepub`
 
 This will install the EPUB library in your current python environment as `pyepub`.
 
@@ -46,16 +43,17 @@ By default the epub is `open`-ed in read-only mode and exposes json-able diction
 The EPUB can be opened in append ("a") mode, thus enabling adding content.
 Due to the internal nature of zipfile stdlib module, a zipfile can't overwrite its contents.
 Thusly, a EPUB opened for append is never overwritten. The `EPUB.__init__` constructor closes the local file and swaps
-the reference with a `StringIO` file-like object. To write the final file to disk, you can call the `EPUB.writetodisk()`
+the reference with a `BytesIO` file-like object. To write the final file to disk, you can call the `EPUB.writetodisk()`
 method:
 
 ```python
 >>> from pyepub import EPUB
+>>> from six import BytesIO
 >>> epub = EPUB("file.epub","a")
 >>> epub.close()  # not necessary, since .writetodisk() will close the file for you.
 >>> epub.writetodisk("newfile.epub")
 >>> epub.filename  # the "file" remains available at .filename property, and can be .read() as usual.
-<StringIO.StringIO instance at 0x1004a8c20>
+<io.BytesIO instance at 0x1004a8c20>
 ```
 
 License

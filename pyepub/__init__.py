@@ -2,9 +2,12 @@ import zipfile
 import os
 import re
 import uuid
-from StringIO import StringIO
+from six import BytesIO
 import datetime
 import logging
+
+from six import text_type as unicodestr
+
 
 try:
     import lxml.etree as ET
@@ -37,9 +40,9 @@ class EPUB(zipfile.ZipFile):
         """
         Global Init Switch
 
-        :type filename: str or StringIO() or file like object for read or add
+        :type filename: unicodestr or BytesIO() or file like object for read or add
         :param filename: File to be processed
-        :type mode: str
+        :type mode: unicodestr
         :param mode: "w" or "r", mode to init the zipfile
         """
         self._write_files = {}  # a dict of files written to the archive  
@@ -47,23 +50,23 @@ class EPUB(zipfile.ZipFile):
         self.epub_mode = mode
         self.writename = None
         if mode == "w":
-            if isinstance(filename, str):
-                self.writename = open(filename, "w")  # on close, we'll overwrite on this file
+            if isinstance(filename, unicodestr):
+                self.writename = open(filename, "wb")  # on close, we'll overwrite on this file
             else:
                 # filename is already a file like object
                 self.writename = filename
-            dummy= StringIO()
+            dummy = BytesIO()
             zipfile.ZipFile.__init__(self, dummy, mode="w")  # fake
             self.__init__write()
         elif mode == "a":
             # we're not going to write to the file until the very end
-            if isinstance(filename, str):
-                self.filename = open(filename, "w")  # on close, we'll overwrite on this file
+            if isinstance(filename, unicodestr):
+                self.filename = open(filename, "wb")  # on close, we'll overwrite on this file
             else:
                 # filename is already a file like object
                 self.filename = filename
             self.filename.seek(0)
-            temp = StringIO()
+            temp = BytesIO()
             temp.write(self.filename.read())
             zipfile.ZipFile.__init__(self, self.filename, mode="r") # r mode doesn't set the filename
             self.__init__read(temp)
@@ -75,7 +78,7 @@ class EPUB(zipfile.ZipFile):
         """
         Constructor to initialize the zipfile in read-only mode
 
-        :type filename: str or StringIO()
+        :type filename: unicodestr or BytesIO()
         :param filename: File to be processed
         """
         self.filename = filename
@@ -84,14 +87,14 @@ class EPUB(zipfile.ZipFile):
             f = self.read("META-INF/container.xml")
         except KeyError:
             # By specification, there MUST be a container.xml in EPUB
-            logger.warning("The %s file is not a valid OCF." % str(filename))
+            logger.warning("The %s file is not a valid OCF." % unicodestr(filename))
             raise InvalidEpub
         try:
             # There MUST be a full path attribute on first grandchild...
             self.opf_path = ET.fromstring(f)[0][0].get("full-path")
         except IndexError:
             #  ...else the file is invalid.
-            logger.warning("The %s file is not a valid OCF." % str(filename))
+            logger.warning("The %s file is not a valid OCF." % unicodestr(filename))
             raise InvalidEpub
 
         # NEW: json-able info tree
@@ -107,7 +110,7 @@ class EPUB(zipfile.ZipFile):
 
         # Iterate over <metadata> section, fill EPUB.info["metadata"] dictionary
         for i in self.opf.find("{0}metadata".format(NAMESPACE["opf"])):
-            if i.tag and isinstance(i.tag, str):
+            if i.tag and isinstance(i.tag, unicodestr):
                 tag = ns.sub('', i.tag)
                 if tag not in self.info["metadata"]:
                     self.info["metadata"][tag] = i.text or i.attrib
@@ -224,8 +227,10 @@ class EPUB(zipfile.ZipFile):
         else:
             try:
                 self._safeclose()
+                if self.writename:
+                    self.writename.close()
                 zipfile.ZipFile.close(self)     # give back control to superclass close method
-            except RuntimeError:            # zipfile.__del__ destructor calls close(), ignore
+            except RuntimeError as e:            # zipfile.__del__ destructor calls close(), ignore
                 return
 
     def _safeclose(self):
@@ -245,11 +250,12 @@ class EPUB(zipfile.ZipFile):
         :type epub_zip: an empty instance of zipfile.Zipfile, mode=w
         :param epub_zip: zip file to write
         """
-        epub_zip.writestr('mimetype', "application/epub+zip")       # requirement of epub container format
+        epub_zip.writestr('mimetype', b'application/epub+zip')       # requirement of epub container format
         epub_zip.writestr('META-INF/container.xml', self._containerxml())
         epub_zip.writestr(self.opf_path, ET.tostring(self.opf, encoding="UTF-8"))  
         epub_zip.writestr(self.ncx_path, ET.tostring(self.ncx, encoding="UTF-8"))  
-        paths = ['mimetype','META-INF/container.xml',self.opf_path,self.ncx_path]+ self._write_files.keys() + self._delete_files
+        paths = ['mimetype', 'META-INF/container.xml', self.opf_path, self.ncx_path] + \
+                list(self._write_files.keys()) + self._delete_files
         if self.epub_mode != 'w':
             for item in self.infolist():
                 if item.filename not in paths:
@@ -320,13 +326,13 @@ class EPUB(zipfile.ZipFile):
                                        media-type="application/oebps-package+xml"/>
                         </rootfiles>
                     </container>"""
-        return template % self.opf_path
+        return bytes(template % self.opf_path, 'utf-8')
 
     def _delete(self, *paths):
         """
         Delete archive member
 
-        :type paths: [str]
+        :type paths: [unicodestr]
         :param paths: files to be deleted inside EPUB file
         """
         for path in paths:
@@ -340,21 +346,21 @@ class EPUB(zipfile.ZipFile):
         """
         Add an metadata entry 
 
-        :type term: str
+        :type term: unicodestr
         :param term: element name/tag for metadata item
-        :type value: str
+        :type value: unicodestr
         :param value: a value
-        :type namespace: str
+        :type namespace: unicodestr
         :param namespace. either a '{URI}' or a registered prefix ('dc', 'opf', 'ncx') are currently built-in
         """
         assert self.epub_mode != "r", "%s is not writable" % self
-        namespace = NAMESPACE.get(namespace,namespace)
+        namespace = NAMESPACE.get(namespace, namespace)
         element = ET.Element(namespace+term, attrib={})
         element.text = value
         self.opf[0].append(element)
         # note that info is ignoring namespace entirely
-        if self.info["metadata"].has_key(term):
-            self.info["metadata"][term] = [self.info["metadata"][term] , value]
+        if term in self.info["metadata"]:
+            self.info["metadata"][term] = [self.info["metadata"][term], value]
         else:
             self.info["metadata"][term] = value
     
@@ -365,16 +371,18 @@ class EPUB(zipfile.ZipFile):
         """
         Add a file to manifest only
 
-        :type fileObject: StringIO
+        :type fileObject: BytesIO
         :param fileObject:
-        :type href: str
+        :type href: unicodestr
         :param href:
-        :type mediatype: str
+        :type mediatype: unicodestr
         :param mediatype:
         """
         assert self.epub_mode != "r", "%s is not writable" % self
-        element = ET.Element(NAMESPACE.get("opf")+"item",
-                             attrib={"id": "id_"+str(uuid.uuid4())[:5], "href": href, "media-type": mediatype})
+        element = ET.Element(
+            NAMESPACE.get("opf") + "item",
+            attrib={"id": "id_" + unicodestr(uuid.uuid4())[:5], "href": href, "media-type": mediatype}
+        )
 
         try:
             self._writestr(os.path.join(self.root_folder, element.attrib["href"]), fileObject.getvalue().encode('utf-8'))
@@ -397,27 +405,34 @@ class EPUB(zipfile.ZipFile):
         """
         assert self.epub_mode != "r", "%s is not writable" % self
         fileid = self.additem(fileObject, href, mediatype)
-        itemref = ET.Element(NAMESPACE.get("opf")+"itemref", attrib={"idref": fileid, "linear": linear})
-        reference = ET.Element(NAMESPACE.get("opf")+"reference", attrib={"title": href, "href": href, "type": reftype})
-        if position is None or position>len(self.opf[2]):
+        itemref = ET.Element(
+            NAMESPACE.get("opf") + "itemref",
+            attrib={"idref": fileid,  "linear": linear
+            }
+        )
+        reference = ET.Element(
+            NAMESPACE.get("opf") + "reference",
+            attrib={ "title": href, "href": href, "type": reftype
+            }
+        )
+        if position is None or position > len(self.opf[2]):
             self.opf[2].append(itemref)
             if self.info["guide"]:
                 self.opf[3].append(reference)
         else:
             self.opf[2].insert(position, itemref)
-            if self.info["guide"] and len(self.opf[3]) >= position+1:
+            if self.info["guide"] and len(self.opf[3]) >= position + 1:
                 self.opf[3].insert(position, reference) 
                                                                                                   
     def writetodisk(self, filename):
         """
         Writes the in-memory archive to disk
 
-        :type filename: str
+        :type filename: unicodestr
         :param filename: name of the file to be writte
         """
-        if isinstance(filename, str):
-            filename = open(filename,'w')
-        
+        if isinstance(filename, unicodestr):
+            filename = open(filename, 'w')
         filename.seek(0)
         new_zip = zipfile.ZipFile(filename, 'w')
         self._write_epub_zip(new_zip)

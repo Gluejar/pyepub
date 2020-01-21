@@ -8,3 +8,6 @@ ENV
 build
 logs/*
 *.ipynb
+.python-version
+dist/*
+pyepub.egg*

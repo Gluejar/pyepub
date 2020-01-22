@@ -61,7 +61,7 @@ class EPUB(zipfile.ZipFile):
         elif mode == "a":
             # we're not going to write to the file until the very end
             if isinstance(filename, unicodestr):
-                self.filename = open(filename, "wb")  # on close, we'll overwrite on this file
+                self.filename = open(filename, "rb+")  # on close, we'll overwrite on this file
             else:
                 # filename is already a file like object
                 self.filename = filename
@@ -432,7 +432,11 @@ class EPUB(zipfile.ZipFile):
         :param filename: name of the file to be writte
         """
         if isinstance(filename, unicodestr):
-            filename = open(filename, 'w')
+            with open(filename, 'wb') as outfile:
+                new_zip = zipfile.ZipFile(filename, 'w')
+                self._write_epub_zip(new_zip)
+                new_zip.close()
+                return
         filename.seek(0)
         new_zip = zipfile.ZipFile(filename, 'w')
         self._write_epub_zip(new_zip)

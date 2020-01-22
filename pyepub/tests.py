@@ -112,4 +112,12 @@ class EpubTests(unittest.TestCase):
         self.assertEqual(len(epub.opf[1]), 2)  # manifest
         self.assertEqual(len(epub.opf[2]), 1)  # spine
         self.assertEqual(len(epub.opf[3]), 0)  # guide
+        with open(f, 'r+b') as epub_from_file:
+            epub = EPUB(epub_from_file, mode='a')
+            epub.addpart(part, "testpart2.xhtml", "application/xhtml+xml", 3)
+            epub.close()
+        epub = EPUB(f, mode='a')
+        epub.addmetadata('test2', 'GOOD')
+        epub.writetodisk('testwrite.epub')
+        
 

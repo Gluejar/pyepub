@@ -1,4 +1,5 @@
 # coding=utf-8
+import os
 import unittest
 from urllib.request import urlopen 
 import zipfile
@@ -27,6 +28,7 @@ class EpubTests(unittest.TestCase):
         test_file_content2 = urlopen('http://www.gutenberg.org/ebooks/2701.epub.noimages')
         self.epub2file2.write(test_file_content2.read())
         self.epub2file2.seek(0)
+        self.randomf = None
 
         
         
@@ -99,25 +101,29 @@ class EpubTests(unittest.TestCase):
         self.assertTrue(zipfile.is_zipfile(new_epub))
 
     def test_new_epub(self):
-        f = '%012x.epub' % random.randrange(16**12)  # random name
-        epub = EPUB(f, mode='w')
+        self.randomf = '%012x.epub' % random.randrange(16**12)  # random name
+        epub = EPUB(self.randomf, mode='w')
         epub.addmetadata('test', 'GOOD')
         uxml = u'<?xml version="1.0" encoding="utf-8" standalone="yes"?><test>VojtěchVojtíšek</test>'
         part = StringIO(unicodestr(uxml))
         epub.addpart(part, "testpart.xhtml", "application/xhtml+xml", 2)
         epub.close()
-        epub = EPUB(f, mode='r')
+        epub = EPUB(self.randomf, mode='r')
         self.assertEqual(len(epub.opf), 4)  # opf lenght
         self.assertEqual(len(epub.opf[0]), 6)  # metadata
         self.assertEqual(len(epub.opf[1]), 2)  # manifest
         self.assertEqual(len(epub.opf[2]), 1)  # spine
         self.assertEqual(len(epub.opf[3]), 0)  # guide
-        with open(f, 'r+b') as epub_from_file:
+        with open(self.randomf, 'r+b') as epub_from_file:
             epub = EPUB(epub_from_file, mode='a')
             epub.addpart(part, "testpart2.xhtml", "application/xhtml+xml", 3)
             epub.close()
-        epub = EPUB(f, mode='a')
+        epub = EPUB(self.randomf, mode='a')
         epub.addmetadata('test2', 'GOOD')
         epub.writetodisk('testwrite.epub')
         
-
+    def tearDown(self):
+        if self.randomf:
+            os.remove(self.randomf)
+            os.remove('testwrite.epub')
+        

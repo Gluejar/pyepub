@@ -48,53 +48,52 @@ class EPUB(zipfile.ZipFile):
         self._write_files = {}  # a dict of files written to the archive  
         self._delete_files = [] # a list of files to delete from the archive
         self.epub_mode = mode
-        self.writename = None
+        self.file_obj = None
+        self.filename = None
         if mode == "w":
             if isinstance(filename, unicodestr):
-                self.writename = open(filename, "wb")  # on close, we'll overwrite on this file
+                self.file_obj = open(filename, "wb")  # on close, we'll overwrite on this file
             else:
                 # filename is already a file like object
-                self.writename = filename
+                self.file_obj = filename
             dummy = BytesIO()
             zipfile.ZipFile.__init__(self, dummy, mode="w")  # fake
             self.__init__write()
         elif mode == "a":
             # we're not going to write to the file until the very end
             if isinstance(filename, unicodestr):
-                self.filename = open(filename, "rb+")  # on close, we'll overwrite on this file
+                self.filename = filename
+                self.file_obj = open(filename, "rb+")  # on close, we'll overwrite on this file
             else:
                 # filename is already a file like object
-                self.filename = filename
-            self.filename.seek(0)
+                self.file_obj = filename
+                self.file_obj.seek(0)
             temp = BytesIO()
-            temp.write(self.filename.read())
-            zipfile.ZipFile.__init__(self, self.filename, mode="r") # r mode doesn't set the filename
-            self.__init__read(temp)
+            temp.write(self.file_obj.read())
+            zipfile.ZipFile.__init__(self, self.file_obj, mode="r") # r mode doesn't set the filename
+            self.__init__read()
         else:  # retrocompatibility?
             zipfile.ZipFile.__init__(self, filename, mode="r")
-            self.__init__read(filename)
+            self.__init__read()
 
-    def __init__read(self, filename):
+    def __init__read(self):
         """
         Constructor to initialize the zipfile in read-only mode
 
-        :type filename: unicodestr or BytesIO()
-        :param filename: File to be processed
         """
-        self.filename = filename
         try:
             # Read the container
             f = self.read("META-INF/container.xml")
         except KeyError:
             # By specification, there MUST be a container.xml in EPUB
-            logger.warning("The %s file is not a valid OCF." % unicodestr(filename))
+            logger.warning("The %s file is not a valid OCF." % unicodestr(self.filename))
             raise InvalidEpub
         try:
             # There MUST be a full path attribute on first grandchild...
             self.opf_path = ET.fromstring(f)[0][0].get("full-path")
         except IndexError:
             #  ...else the file is invalid.
-            logger.warning("The %s file is not a valid OCF." % unicodestr(filename))
+            logger.warning("The %s file is not a valid OCF." % unicodestr(self.filename))
             raise InvalidEpub
 
         # NEW: json-able info tree
@@ -220,18 +219,18 @@ class EPUB(zipfile.ZipFile):
 
     def close(self):
         if self.fp is None:     # Check file status
-            return
-        if self.mode == "r":    # check file mode
+            pass
+        elif self.mode == "r":    # check file mode
             zipfile.ZipFile.close(self)
-            return
         else:
             try:
                 self._safeclose()
-                if self.writename:
-                    self.writename.close()
                 zipfile.ZipFile.close(self)     # give back control to superclass close method
             except RuntimeError as e:            # zipfile.__del__ destructor calls close(), ignore
-                return
+                pass
+        if self.file_obj:
+            self.file_obj.close()
+       
 
     def _safeclose(self):
         """
@@ -239,9 +238,10 @@ class EPUB(zipfile.ZipFile):
         Writes the empty or modified opf-ncx files before closing the zipfile
         """
         if self.epub_mode == 'w':
-            self.writetodisk(self.writename)
+            self.writetodisk(self.file_obj)
         else:
-            self.writetodisk(self.filename)
+            self.writetodisk(self.file_obj)
+
 
     def _write_epub_zip(self, epub_zip):
         """
@@ -262,6 +262,7 @@ class EPUB(zipfile.ZipFile):
                     epub_zip.writestr(item.filename, self.read(item.filename))
         for key in self._write_files.keys():
             epub_zip.writestr(key, self._write_files[key])
+
 
     def _init_opf(self):
         """
@@ -290,6 +291,7 @@ class EPUB(zipfile.ZipFile):
 
         doc = opf_tmpl.format(uid=self.uid, date=today)
         return doc
+
 
     def _init_ncx(self):
         """
@@ -424,20 +426,21 @@ class EPUB(zipfile.ZipFile):
             if self.info["guide"] and len(self.opf[3]) >= position + 1:
                 self.opf[3].insert(position, reference) 
                                                                                                   
-    def writetodisk(self, filename):
+    def writetodisk(self, file_obj_or_name):
         """
         Writes the in-memory archive to disk
 
         :type filename: unicodestr
-        :param filename: name of the file to be writte
+        :param filename: name of the file to be written
         """
-        if isinstance(filename, unicodestr):
-            with open(filename, 'wb') as outfile:
-                new_zip = zipfile.ZipFile(filename, 'w')
+        if isinstance(file_obj_or_name, unicodestr):
+            with open(file_obj_or_name, 'wb') as outfile:
+                new_zip = zipfile.ZipFile(outfile, 'w')
                 self._write_epub_zip(new_zip)
                 new_zip.close()
                 return
-        filename.seek(0)
-        new_zip = zipfile.ZipFile(filename, 'w')
-        self._write_epub_zip(new_zip)
-        new_zip.close()
+        elif file_obj_or_name:
+            file_obj_or_name.seek(0)
+            new_zip = zipfile.ZipFile(file_obj_or_name, 'w')
+            self._write_epub_zip(new_zip)
+            new_zip.close()

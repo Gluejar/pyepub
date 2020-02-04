@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='pyepub',
-    version='0.4.0',
+    version='0.5.0',
     packages=['pyepub'],
     url='https://github.com/Gluejar/pyepub',
     license='MIT',
